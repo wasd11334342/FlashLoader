@@ -19,7 +19,7 @@ namespace FlashGameLoader
                 @"Software\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION",
                 RegistryKeyPermissionCheck.ReadWriteSubTree))
             {
-                key.SetValue(appName, 11001, RegistryValueKind.DWord); // 11001 = IE11 edge mode
+                key.SetValue(appName, 8000, RegistryValueKind.DWord); // 11001 = IE11 edge mode
             }
         }
 
@@ -72,31 +72,29 @@ namespace FlashGameLoader
             refreshButton.Click += (sender, e) =>
             {
                 webBrowser.Refresh();
+                // 關閉網頁離開提示
+                webBrowser.Document.InvokeScript("execScript", new object[]
+                {
+                    "window.onbeforeunload = null; window.onunload = null;"
+                });
             };
 
 
-            // 綁定重新整理驗證碼按鈕
+            
             refreshCodeButton.Click += (sender, e) =>
             {
                 RefreshVerifyCodeImage();
             };
 
-            // 用來跳過離開視窗的提示
             webBrowser.DocumentCompleted += (s, e) =>
             {
                 if (webBrowser.Document != null && webBrowser.Url.AbsoluteUri.Contains("/Login"))
                 {
-                    // 網頁縮放比例設定為80%，用來方便截圖，但之後發現座標會有問題，所以先不改
+                    // 網頁縮放比例設定為80%，用來方便截圖
                     if (webBrowser.Document?.Body != null)
                     {
                         webBrowser.Document.Body.Style = "zoom:80%;";
                     }
-
-                    // 讓離開網頁的提示關閉
-                    webBrowser.Document.InvokeScript("execScript", new object[]
-                    {
-                        "window.onbeforeunload = null; window.onunload = null;"
-                    });
 
                     // 自動輸入帳號
                     var userBox = webBrowser.Document.GetElementById("UserID");
@@ -120,10 +118,27 @@ namespace FlashGameLoader
                     // 自動擷取驗證碼圖片
                     AutoCaptureVerifyCodeImage();
                 }
-                // 用JS把右邊的資訊欄刪除，不刪除會影響到畫面顯示
+                // 用JS把左邊的資訊欄刪除，不刪除會影響到畫面顯示
                 if (webBrowser.Url != null && webBrowser.Url.AbsoluteUri.Contains("/Game/Server/"))
                 {
                     string script = @"
+                        var nav = document.getElementById('nav');
+                        if (nav) {
+                            nav.parentNode.removeChild(nav);
+                        }
+
+                        // 刪除 id='btn_menu_close'
+                        var btnClose = document.getElementById('btn_menu_close');
+                        if (btnClose) {
+                            btnClose.parentNode.removeChild(btnClose);
+                        }
+
+                        // 刪除 id='btn_menu_open'
+                        var btnOpen = document.getElementById('btn_menu_open');
+                        if (btnOpen) {
+                            btnOpen.parentNode.removeChild(btnOpen);
+                        };
+
                         var wap = document.querySelector('.game_wap');
                         if (wap) {
                             var tds = wap.querySelectorAll('td');
@@ -142,36 +157,6 @@ namespace FlashGameLoader
                 }
             };
         }
-
-        // 截取整個WebBrowser控件的截圖
-        private void CaptureWebBrowser()
-        {
-            try
-            {
-                // 取得WebBrowser的大小
-                Rectangle bounds = webBrowser.Bounds;
-
-                // 建立bitmap來儲存截圖
-                using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
-                {
-                    // 將WebBrowser內容繪製到bitmap
-                    webBrowser.DrawToBitmap(bitmap, new Rectangle(0, 0, bounds.Width, bounds.Height));
-
-                    // 儲存圖片
-                    string fileName = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-                    string filePath = Path.Combine(Application.StartupPath, fileName);
-                    bitmap.Save(filePath, ImageFormat.Png);
-
-                    UpdateStatus($"整頁截圖已儲存: {fileName}");
-                }
-            }
-            catch (Exception ex)
-            {
-                UpdateStatus($"截圖失敗: {ex.Message}");
-            }
-        }
-
-
 
         // 更新狀態顯示
         private void UpdateStatus(string message)
@@ -202,12 +187,6 @@ namespace FlashGameLoader
         {
             try
             {
-                if (webBrowser.Document == null)
-                {
-                    MessageBox.Show("網頁尚未載入完成");
-                    return;
-                }
-
                 // 方法1：使用JavaScript Canvas方式擷取（推薦，品質最好）
                 string script = @"
                     (function() {
@@ -267,7 +246,6 @@ namespace FlashGameLoader
             {
                 MessageBox.Show($"擷取驗證碼圖片失敗: {ex.Message}");
                 // 如果所有方法都失敗，至少截取整頁
-                CaptureWebBrowser();
             }
         }
 
@@ -291,7 +269,7 @@ namespace FlashGameLoader
 
                     // 延遲後自動擷取新的驗證碼
                     System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
-                    timer.Interval = 500; // 延遲1.5秒等待新圖片載入
+                    timer.Interval = 500; // 延遲0.5秒等待新圖片載入
                     timer.Tick += (sender, e) =>
                     {
                         timer.Stop();
