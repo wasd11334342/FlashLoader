@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Win32;
 using System.Drawing.Imaging;
+using System.Threading.Tasks;
 
 
 namespace FlashGameLoader
@@ -13,56 +14,59 @@ namespace FlashGameLoader
         /// </summary>
         /// <param name="imagePath">圖片路徑</param>
         /// <returns>4位驗證碼結果，失敗返回null</returns>
-        public static string? Predict(string imagePath)
+
+
+        public static async Task<string?> Predict(string imagePath)
         {
             try
             {
-                // 檢查 predict.py 是否存在
                 if (!File.Exists("predict.py"))
                 {
-                    MessageBox.Show("找不到 predict.py 檔案，程式即將關閉", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    Application.Exit(); // 或者 this.Close(); 如果只想關閉當前視窗
-                }
-
-                // 檢查模型檔案是否存在
-                if (!File.Exists("best_mobilenet_captcha_model.pth"))
-                {
-                    MessageBox.Show("找不到模型檔案 best_mobilenet_captcha_model.pth，程式即將關閉", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("找不到 predict.py 檔案，程式即將關閉", "錯誤",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
                     Application.Exit();
                 }
 
-
-
-                var process = Process.Start(new ProcessStartInfo
+                if (!File.Exists("best_mobilenet_captcha_model.pth"))
                 {
-                    FileName = "python",
-                    Arguments = $"predict.py \"{imagePath}\" best_mobilenet_captcha_model.pth",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                })!;
-
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
-
-                if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
-                {
-                    // Python直接輸出驗證碼，取第一行非空白內容
-                    string result = output.Trim().Split('\n')[0].Trim();
-
-                    // 驗證結果格式（應該是4位英數字）
-                    if (!string.IsNullOrEmpty(result) && result.Length == 4)
-                    {
-                        return result.ToUpper(); // 統一轉為大寫
-                    }
+                    MessageBox.Show("找不到模型檔案 best_mobilenet_captcha_model.pth，程式即將關閉", "錯誤",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Application.Exit();
                 }
-                return null;
+
+                return await Task.Run(() =>
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "python",
+                        Arguments = $"predict.py \"{imagePath}\" best_mobilenet_captcha_model.pth",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true
+                    };
+
+                    using var process = Process.Start(psi)!;
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+                    process.WaitForExit();
+
+                    if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
+                    {
+                        string result = output.Trim().Split('\n')[0].Trim();
+                        if (result.Length == 4)
+                            return result.ToUpper();
+                    }
+
+                    return null;
+                });
             }
             catch
             {
                 return null;
             }
         }
+
     }
 
     public class Program : Form
@@ -107,9 +111,11 @@ namespace FlashGameLoader
             // 顯示 PID 和狀態資訊
             Label pidLabel = new Label { AutoSize = true, Text = $"PID: {Process.GetCurrentProcess().Id}", Padding = new Padding(5) };
             statusLabel = new Label { AutoSize = true, Text = "準備中...", Padding = new Padding(5) };
+            Label WebUrl = new Label { AutoSize = true, Text = $"網址尚未載入", Padding = new Padding(5) };
 
             toolStrip.Items.Add(new ToolStripControlHost(pidLabel));
             toolStrip.Items.Add(new ToolStripControlHost(statusLabel));
+            toolStrip.Items.Add(new ToolStripControlHost(WebUrl));
 
             webBrowser = new WebBrowser
             {
@@ -220,6 +226,7 @@ namespace FlashGameLoader
                     UpdateStatus("選擇伺服器");
                     webBrowser.Navigate("http://san.9splay.com/Game/Server/92");
                 }
+                WebUrl.Text = webBrowser.Url!.AbsoluteUri;
             };
         }
 
@@ -316,14 +323,14 @@ namespace FlashGameLoader
                 // 如果所有方法都失敗，至少截取整頁
             }
         }
-    
+
         // 用python預測
-        private void PredictAndFillCaptcha(string imagePath)
+        private async Task PredictAndFillCaptcha(string imagePath)
         {
             try
             {
                 // 使用極簡版預測器
-                string predictedResult = CaptchaPredictor.Predict(imagePath)!;
+                string? predictedResult = await CaptchaPredictor.Predict(imagePath)!;
 
                 if (!string.IsNullOrEmpty(predictedResult))
                 {
