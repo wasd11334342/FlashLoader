@@ -6,6 +6,49 @@ using System.Drawing.Imaging;
 
 namespace FlashGameLoader
 {
+    public static class CaptchaPredictor
+    {
+        /// <summary>
+        /// 預測驗證碼圖片
+        /// </summary>
+        /// <param name="imagePath">圖片路徑</param>
+        /// <returns>4位驗證碼結果，失敗返回null</returns>
+        public static string Predict(string imagePath)
+        {
+            try
+            {
+                var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "python",
+                    Arguments = $"predict.py \"{imagePath}\" best_mobilenet_captcha_model.pth",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                });
+
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+
+                if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
+                {
+                    // Python直接輸出驗證碼，取第一行非空白內容
+                    string result = output.Trim().Split('\n')[0].Trim();
+
+                    // 驗證結果格式（應該是4位英數字）
+                    if (!string.IsNullOrEmpty(result) && result.Length == 4)
+                    {
+                        return result.ToUpper(); // 統一轉為大寫
+                    }
+                }
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
     public class Program : Form
     {
         private WebBrowser webBrowser;
@@ -19,7 +62,7 @@ namespace FlashGameLoader
                 @"Software\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION",
                 RegistryKeyPermissionCheck.ReadWriteSubTree))
             {
-                key.SetValue(appName, 8000, RegistryValueKind.DWord); // 11001 = IE11 edge mode
+                key.SetValue(appName, 11001, RegistryValueKind.DWord); // 11001 = IE11 edge mode
             }
         }
 
@@ -77,10 +120,11 @@ namespace FlashGameLoader
                 {
                     "window.onbeforeunload = null; window.onunload = null;"
                 });
+                UpdateStatus(webBrowser.Url.AbsoluteUri);
             };
 
 
-            
+
             refreshCodeButton.Click += (sender, e) =>
             {
                 RefreshVerifyCodeImage();
@@ -109,17 +153,17 @@ namespace FlashGameLoader
                         passBox.SetAttribute("value", "zxc21735852");
                     }
                     // 自動輸入密碼
-                    var captcha = webBrowser.Document.GetElementById("CheckText");
-                    if (captcha != null)
-                    {
-                        captcha.SetAttribute("value", "差一滴滴");
-                    }
+                    // var captcha = webBrowser.Document.GetElementById("CheckText");
+                    // if (captcha != null)
+                    // {
+                    //     captcha.SetAttribute("value", "差一滴滴");
+                    // }
 
                     // 自動擷取驗證碼圖片
                     AutoCaptureVerifyCodeImage();
                 }
                 // 用JS把左邊的資訊欄刪除，不刪除會影響到畫面顯示
-                if (webBrowser.Url != null && webBrowser.Url.AbsoluteUri.Contains("/Game/Server/"))
+                if (webBrowser.Document != null && webBrowser.Url.AbsoluteUri.Contains("/Game/Server/"))
                 {
                     string script = @"
                         var nav = document.getElementById('nav');
@@ -153,7 +197,13 @@ namespace FlashGameLoader
                     webBrowser.Document.InvokeScript("eval", new object[] { script });
 
                     UpdateStatus($"遊戲進行中");
-                    refreshCodeButton.Visible = false; 
+                    refreshCodeButton.Visible = false;
+                }
+
+                if (webBrowser.Document != null && webBrowser.Url.AbsoluteUri == "http://san.9splay.com/")
+                {
+                    UpdateStatus("選擇伺服器");
+                    webBrowser.Navigate("http://san.9splay.com/Game/Server/92");
                 }
             };
         }
@@ -214,7 +264,7 @@ namespace FlashGameLoader
 
                 if (base64Data == "loading")
                 {
-                    MessageBox.Show("圖片正在載入中，請稍後再試");
+                    UpdateStatus("圖片正在載入中，請稍後再試");
                     return;
                 }
 
@@ -239,6 +289,9 @@ namespace FlashGameLoader
                     //
                     // MessageBox.Show($"驗證碼圖片已儲存至: {filePath}");
                     UpdateStatus($"驗證碼圖片已儲存至: {filePath}");
+                    // 🔥 這裡是新增的部分：預測驗證碼並填入結果
+                    PredictAndFillCaptcha(filePath);
+                    ClickLogin();
                 }
 
             }
@@ -248,6 +301,48 @@ namespace FlashGameLoader
                 // 如果所有方法都失敗，至少截取整頁
             }
         }
+    
+        // 用python預測
+        private void PredictAndFillCaptcha(string imagePath)
+        {
+            try
+            {
+                // 使用極簡版預測器
+                string predictedResult = CaptchaPredictor.Predict(imagePath);
+
+                if (!string.IsNullOrEmpty(predictedResult))
+                {
+                    // 自動填入預測結果到CheckText欄位
+                    var captchaInput = webBrowser.Document.GetElementById("CheckText");
+                    if (captchaInput != null)
+                    {
+                        captchaInput.SetAttribute("value", predictedResult);
+                        UpdateStatus($"驗證碼識別結果: {predictedResult}");
+
+                        // 可選：自動聚焦到輸入框以便確認
+                        captchaInput.Focus();
+                    }
+                    else
+                    {
+                        UpdateStatus($"驗證碼識別成功: {predictedResult}，但找不到輸入框");
+                    }
+                }
+                else
+                {
+                    UpdateStatus("驗證碼識別失敗，請手動輸入");
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdateStatus($"驗證碼預測失敗: {ex.Message}");
+            }
+        }
+
+        private void ClickLogin()
+        {
+            webBrowser.Document.InvokeScript("dosubmit");
+        }
+
 
         // 新增：重新整理驗證碼圖片的方法
         private void RefreshVerifyCodeImage()
@@ -303,7 +398,9 @@ namespace FlashGameLoader
                 }
             }
         }
-        
+
 
     }
+
+
 }
