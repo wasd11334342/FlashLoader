@@ -13,7 +13,7 @@ namespace FlashGameLoader
         /// </summary>
         /// <param name="imagePath">圖片路徑</param>
         /// <returns>4位驗證碼結果，失敗返回null</returns>
-        public static string Predict(string imagePath)
+        public static string? Predict(string imagePath)
         {
             try
             {
@@ -24,7 +24,7 @@ namespace FlashGameLoader
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     CreateNoWindow = true
-                });
+                })!;
 
                 string output = process.StandardOutput.ReadToEnd();
                 process.WaitForExit();
@@ -57,7 +57,7 @@ namespace FlashGameLoader
         // 設定瀏覽器IE的版本為IE11，設定完才可以用CSS的方式修改網頁的縮放，預設的IE7沒辦法用CSS
         private static void SetBrowserFeatureControl()
         {
-            string appName = System.IO.Path.GetFileName(Process.GetCurrentProcess().MainModule.FileName);
+            string appName = System.IO.Path.GetFileName(Process.GetCurrentProcess().MainModule!.FileName);
             using (var key = Registry.CurrentUser.CreateSubKey(
                 @"Software\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION",
                 RegistryKeyPermissionCheck.ReadWriteSubTree))
@@ -116,11 +116,10 @@ namespace FlashGameLoader
             {
                 webBrowser.Refresh();
                 // 關閉網頁離開提示
-                webBrowser.Document.InvokeScript("execScript", new object[]
+                webBrowser.Document!.InvokeScript("execScript", new object[]
                 {
                     "window.onbeforeunload = null; window.onunload = null;"
                 });
-                UpdateStatus(webBrowser.Url.AbsoluteUri);
             };
 
 
@@ -132,7 +131,7 @@ namespace FlashGameLoader
 
             webBrowser.DocumentCompleted += (s, e) =>
             {
-                if (webBrowser.Document != null && webBrowser.Url.AbsoluteUri.Contains("/Login"))
+                if (webBrowser.Document != null && webBrowser.Url!.AbsoluteUri.Contains("/Login"))
                 {
                     // 網頁縮放比例設定為80%，用來方便截圖
                     if (webBrowser.Document?.Body != null)
@@ -141,7 +140,7 @@ namespace FlashGameLoader
                     }
 
                     // 自動輸入帳號
-                    var userBox = webBrowser.Document.GetElementById("UserID");
+                    var userBox = webBrowser.Document!.GetElementById("UserID");
                     if (userBox != null)
                     {
                         userBox.SetAttribute("value", "zxc11334342");
@@ -163,7 +162,7 @@ namespace FlashGameLoader
                     AutoCaptureVerifyCodeImage();
                 }
                 // 用JS把左邊的資訊欄刪除，不刪除會影響到畫面顯示
-                if (webBrowser.Document != null && webBrowser.Url.AbsoluteUri.Contains("/Game/Server/"))
+                if (webBrowser.Document != null && webBrowser.Url!.AbsoluteUri.Contains("/Game/Server/"))
                 {
                     string script = @"
                         var nav = document.getElementById('nav');
@@ -200,7 +199,7 @@ namespace FlashGameLoader
                     refreshCodeButton.Visible = false;
                 }
 
-                if (webBrowser.Document != null && webBrowser.Url.AbsoluteUri == "http://san.9splay.com/")
+                if (webBrowser.Document != null && webBrowser.Url!.AbsoluteUri == "http://san.9splay.com/")
                 {
                     UpdateStatus("選擇伺服器");
                     webBrowser.Navigate("http://san.9splay.com/Game/Server/92");
@@ -259,8 +258,8 @@ namespace FlashGameLoader
                     })();
                 ";
 
-                object result = webBrowser.Document.InvokeScript("eval", new object[] { script });
-                string base64Data = result?.ToString();
+                object result = webBrowser.Document!.InvokeScript("eval", new object[] { script })!;
+                string base64Data = result?.ToString()!;
 
                 if (base64Data == "loading")
                 {
@@ -308,12 +307,12 @@ namespace FlashGameLoader
             try
             {
                 // 使用極簡版預測器
-                string predictedResult = CaptchaPredictor.Predict(imagePath);
+                string predictedResult = CaptchaPredictor.Predict(imagePath)!;
 
                 if (!string.IsNullOrEmpty(predictedResult))
                 {
                     // 自動填入預測結果到CheckText欄位
-                    var captchaInput = webBrowser.Document.GetElementById("CheckText");
+                    var captchaInput = webBrowser.Document!.GetElementById("CheckText");
                     if (captchaInput != null)
                     {
                         captchaInput.SetAttribute("value", predictedResult);
@@ -340,7 +339,7 @@ namespace FlashGameLoader
 
         private void ClickLogin()
         {
-            webBrowser.Document.InvokeScript("dosubmit");
+            webBrowser.Document!.InvokeScript("dosubmit");
         }
 
 

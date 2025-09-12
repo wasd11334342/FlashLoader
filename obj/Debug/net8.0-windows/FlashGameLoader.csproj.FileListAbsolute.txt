@@ -17,3 +17,4 @@ C:\Users\user\FlashGameLoader\bin\Debug\net8.0-windows\9s.deps.json
 C:\Users\user\FlashGameLoader\bin\Debug\net8.0-windows\9s.runtimeconfig.json
 C:\Users\user\FlashGameLoader\bin\Debug\net8.0-windows\9s.dll
 C:\Users\user\FlashGameLoader\bin\Debug\net8.0-windows\9s.pdb
+C:\Users\user\FlashGameLoader\obj\Debug\net8.0-windows\FlashGameLoader.sourcelink.json
