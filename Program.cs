@@ -9,13 +9,6 @@ namespace FlashGameLoader
 {
     public static class CaptchaPredictor
     {
-        /// <summary>
-        /// 預測驗證碼圖片
-        /// </summary>
-        /// <param name="imagePath">圖片路徑</param>
-        /// <returns>4位驗證碼結果，失敗返回null</returns>
-
-
         public static async Task<string?> Predict(string imagePath)
         {
             try
@@ -111,11 +104,9 @@ namespace FlashGameLoader
             // 顯示 PID 和狀態資訊
             Label pidLabel = new Label { AutoSize = true, Text = $"PID: {Process.GetCurrentProcess().Id}", Padding = new Padding(5) };
             statusLabel = new Label { AutoSize = true, Text = "準備中...", Padding = new Padding(5) };
-            Label WebUrl = new Label { AutoSize = true, Text = $"網址尚未載入", Padding = new Padding(5) };
 
             toolStrip.Items.Add(new ToolStripControlHost(pidLabel));
             toolStrip.Items.Add(new ToolStripControlHost(statusLabel));
-            toolStrip.Items.Add(new ToolStripControlHost(WebUrl));
 
             webBrowser = new WebBrowser
             {
@@ -173,15 +164,8 @@ namespace FlashGameLoader
                     {
                         passBox.SetAttribute("value", "zxc21735852");
                     }
-                    // 自動輸入密碼
-                    // var captcha = webBrowser.Document.GetElementById("CheckText");
-                    // if (captcha != null)
-                    // {
-                    //     captcha.SetAttribute("value", "差一滴滴");
-                    // }
-
                     // 自動擷取驗證碼圖片
-                    AutoCaptureVerifyCodeImage();
+                    CaptureVerifyCodeImage();
                 }
                 // 用JS把左邊的資訊欄刪除，不刪除會影響到畫面顯示
                 if (webBrowser.Document != null && webBrowser.Url!.AbsoluteUri.Contains("/Game/Server/"))
@@ -226,7 +210,6 @@ namespace FlashGameLoader
                     UpdateStatus("選擇伺服器");
                     webBrowser.Navigate("http://san.9splay.com/Game/Server/92");
                 }
-                WebUrl.Text = webBrowser.Url!.AbsoluteUri;
             };
         }
 
@@ -255,7 +238,7 @@ namespace FlashGameLoader
             };
             timer.Start();
         }
-        private void CaptureVerifyCodeImage()
+        private async void CaptureVerifyCodeImage()
         {
             try
             {
@@ -312,15 +295,20 @@ namespace FlashGameLoader
                     // MessageBox.Show($"驗證碼圖片已儲存至: {filePath}");
                     UpdateStatus($"驗證碼圖片已儲存至: {filePath}");
                     // 🔥 這裡是新增的部分：預測驗證碼並填入結果
-                    PredictAndFillCaptcha(filePath);
-                    ClickLogin();
+                    await PredictAndFillCaptcha(filePath);
+            
+                    // 只有在預測成功填入後才自動登入
+                    var captchaInput = webBrowser.Document!.GetElementById("CheckText");
+                    if (captchaInput != null && !string.IsNullOrEmpty(captchaInput.GetAttribute("value")))
+                    {
+                        ClickLogin();
+                    }
                 }
 
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"擷取驗證碼圖片失敗: {ex.Message}");
-                // 如果所有方法都失敗，至少截取整頁
+                UpdateStatus($"擷取驗證碼圖片失敗: {ex.Message}");
             }
         }
 
@@ -329,7 +317,6 @@ namespace FlashGameLoader
         {
             try
             {
-                // 使用極簡版預測器
                 string? predictedResult = await CaptchaPredictor.Predict(imagePath)!;
 
                 if (!string.IsNullOrEmpty(predictedResult))
@@ -340,9 +327,6 @@ namespace FlashGameLoader
                     {
                         captchaInput.SetAttribute("value", predictedResult);
                         UpdateStatus($"驗證碼識別結果: {predictedResult}");
-
-                        // 可選：自動聚焦到輸入框以便確認
-                        captchaInput.Focus();
                     }
                     else
                     {
@@ -366,18 +350,12 @@ namespace FlashGameLoader
         }
 
 
-        // 新增：重新整理驗證碼圖片的方法
+        // 重新整理驗證碼圖片
         private void RefreshVerifyCodeImage()
         {
             try
             {
-                if (webBrowser.Document == null)
-                {
-                    UpdateStatus("網頁尚未載入");
-                    return;
-                }
-
-                var img = webBrowser.Document.GetElementById("verifyCodeImg");
+                var img = webBrowser.Document?.GetElementById("verifyCodeImg");
                 if (img != null)
                 {
                     UpdateStatus("重新整理驗證碼中...");
