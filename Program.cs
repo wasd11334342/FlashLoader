@@ -17,6 +17,22 @@ namespace FlashGameLoader
         {
             try
             {
+                // 檢查 predict.py 是否存在
+                if (!File.Exists("predict.py"))
+                {
+                    MessageBox.Show("找不到 predict.py 檔案，程式即將關閉", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Application.Exit(); // 或者 this.Close(); 如果只想關閉當前視窗
+                }
+
+                // 檢查模型檔案是否存在
+                if (!File.Exists("best_mobilenet_captcha_model.pth"))
+                {
+                    MessageBox.Show("找不到模型檔案 best_mobilenet_captcha_model.pth，程式即將關閉", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Application.Exit();
+                }
+
+
+
                 var process = Process.Start(new ProcessStartInfo
                 {
                     FileName = "python",
