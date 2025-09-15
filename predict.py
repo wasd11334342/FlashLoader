@@ -9,6 +9,8 @@ import os
 import sys
 import json
 import argparse
+import base64
+import io
 
 # 字符集定义
 CHARS = string.ascii_uppercase + string.digits  # A-Z + 0-9
@@ -99,13 +101,17 @@ class MobileNetV2Captcha(nn.Module):
             outputs.append(classifier(features))
         return outputs
 
-def predict_captcha(model, image_path, device='cuda' if torch.cuda.is_available() else 'cpu'):
+def predict_captcha(model, image, mode, device='cuda' if torch.cuda.is_available() else 'cpu'):
     """预测单张验证码图片"""
     model.eval()
     
     try:
         # 預處理
-        image = Image.open(image_path).convert('RGB')
+        if mode == 'f':
+            image = Image.open(image).convert('RGB')
+        else:
+            image = base64.b64decode(image)
+            image = Image.open(io.BytesIO(image)).convert('RGB')
         image = remove_black_pixels_with_surrounding_color(image)
         processed_image = enhance_contrast(image)
         
@@ -141,94 +147,27 @@ def load_model(weight_path, device='cuda' if torch.cuda.is_available() else 'cpu
         print(f"ERROR:載入模型失敗: {e}", file=sys.stderr)
         return None, None
 
-def predict_single(image_path, weight_path):
+def predict_single(image, weight_path, mode):
     """預測單張圖片並輸出結構化結果"""
     model, device = load_model(weight_path)
     if model is None:
         sys.exit(1)
     
-    result, confidence = predict_captcha(model, image_path, device)
+    result, _ = predict_captcha(model, image, mode, device)
     
     if result is not None:
         # 只輸出結果供C#解析
         print(f"{result}")
-        # 如果需要信心度，取消下行註解
-        # print(f"CONFIDENCE:{confidence}")
     else:
-        sys.exit(1)
-
-def predict_batch(image_folder, weight_path):
-    """批量預測並輸出JSON結果"""
-    model, device = load_model(weight_path)
-    if model is None:
-        sys.exit(1)
-    
-    # 支援的圖片格式
-    image_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.gif']
-    image_files = []
-    
-    try:
-        for ext in image_extensions:
-            image_files.extend([f for f in os.listdir(image_folder) if f.lower().endswith(ext)])
-        
-        if not image_files:
-            print("ERROR:沒有找到圖片檔案", file=sys.stderr)
-            sys.exit(1)
-        
-        results = []
-        for image_file in image_files:
-            image_path = os.path.join(image_folder, image_file)
-            result, confidence = predict_captcha(model, image_path, device)
-            
-            if result is not None:
-                results.append({
-                    'filename': image_file,
-                    'prediction': result,
-                    'confidence': confidence
-                })
-        
-        # 輸出JSON格式結果
-        print(json.dumps(results, ensure_ascii=False))
-        
-    except Exception as e:
-        print(f"ERROR:批量預測失敗: {e}", file=sys.stderr)
         sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(description='CAPTCHA預測程序')
-    parser.add_argument('image_path', help='圖片路徑或資料夾路徑')
+    parser.add_argument('image', help='圖片路徑或資料夾路徑')
     parser.add_argument('weight_path', help='模型權重檔案路徑')
-    parser.add_argument('--batch', action='store_true', help='批量預測模式')
-    
-    # 如果沒有參數，嘗試從命令行讀取
-    if len(sys.argv) == 1:
-        # 兼容舊版本調用方式
-        if len(sys.argv) >= 3:
-            image_path = sys.argv[1]
-            weight_path = sys.argv[2] if len(sys.argv) > 2 else 'best_mobilenet_captcha_model.pth'
-            predict_single(image_path, weight_path)
-        else:
-            print("ERROR:參數不足", file=sys.stderr)
-            sys.exit(1)
-    else:
-        args = parser.parse_args()
-        
-        if args.batch:
-            predict_batch(args.image_path, args.weight_path)
-        else:
-            predict_single(args.image_path, args.weight_path)
+    parser.add_argument('mode', help='載入圖片的模式，s=用base64字串，f=用圖片路徑')
+    args = parser.parse_args()
+    predict_single(args.image, args.weight_path, args.mode)
 
 if __name__ == "__main__":
-    # 兼容兩種調用方式
-    if len(sys.argv) >= 2 and not sys.argv[1].startswith('-'):
-        # 直接參數調用: python script.py image_path [weight_path]
-        image_path = sys.argv[1]
-        weight_path = sys.argv[2] if len(sys.argv) > 2 else 'best_mobilenet_captcha_model.pth'
-        
-        if '--batch' in sys.argv:
-            predict_batch(image_path, weight_path)
-        else:
-            predict_single(image_path, weight_path)
-    else:
-        # argparse調用
-        main()
+    main()
