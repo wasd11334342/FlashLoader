@@ -1,8 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Win32;
-using System.Drawing.Imaging;
-using System.Threading.Tasks;
+
 
 
 namespace FlashGameLoader
@@ -32,7 +31,7 @@ namespace FlashGameLoader
                     var psi = new ProcessStartInfo
                     {
                         FileName = "python",
-                        Arguments = $"predict.py \"{imagePath}\" best_mobilenet_captcha_model.pth",
+                        Arguments = $"predict.py \"{imagePath}\" best_mobilenet_captcha_model.pth s",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -87,6 +86,7 @@ namespace FlashGameLoader
             Application.Run(new Program());
         }
 
+        // 介面主程式，網頁的邏輯，網頁的按鈕，網頁顯示文字
         public Program()
         {
             this.Text = "9s";
@@ -146,12 +146,6 @@ namespace FlashGameLoader
             {
                 if (webBrowser.Document != null && webBrowser.Url!.AbsoluteUri.Contains("/Login"))
                 {
-                    // 網頁縮放比例設定為80%，用來方便截圖
-                    if (webBrowser.Document?.Body != null)
-                    {
-                        webBrowser.Document.Body.Style = "zoom:80%;";
-                    }
-
                     // 自動輸入帳號
                     var userBox = webBrowser.Document!.GetElementById("UserID");
                     if (userBox != null)
@@ -225,19 +219,8 @@ namespace FlashGameLoader
                 statusLabel.Text = message;
             }
         }
-        private void AutoCaptureVerifyCodeImage()
-        {
-            // 使用Timer延遲執行，確保圖片已完全載入
-            System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
-            timer.Interval = 1000; // 延遲1秒
-            timer.Tick += (sender, e) =>
-            {
-                timer.Stop();
-                timer.Dispose();
-                CaptureVerifyCodeImage();
-            };
-            timer.Start();
-        }
+
+        // 用JS擷取圖片並用python預測
         private async void CaptureVerifyCodeImage()
         {
             try
@@ -277,26 +260,26 @@ namespace FlashGameLoader
                 {
                     // 移除data:image/png;base64,前綴
                     string base64String = base64Data.Substring(base64Data.IndexOf(',') + 1);
-                    byte[] imageBytes = Convert.FromBase64String(base64String);
+                    // 原本是先儲存圖片再讀取，之後才預測，現在直接用原本的編碼用python轉成圖片做預測
+                    // byte[] imageBytes = Convert.FromBase64String(base64String);
+                    // string folder = Path.Combine(Application.StartupPath, "captcha");
 
-                    string folder = Path.Combine(Application.StartupPath, "captcha");
+                    // // 如果資料夾不存在就建立
+                    // if (!Directory.Exists(folder))
+                    // {
+                    //     Directory.CreateDirectory(folder);
+                    // }
 
-                    // 如果資料夾不存在就建立
-                    if (!Directory.Exists(folder))
-                    {
-                        Directory.CreateDirectory(folder);
-                    }
+                    // // 儲存圖片
+                    // string fileName = $"verifycode_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                    // string filePath = Path.Combine(folder, fileName);
+                    // File.WriteAllBytes(filePath, imageBytes);
+                    // UpdateStatus($"驗證碼圖片已儲存至: {filePath}");
 
-                    // 儲存圖片
-                    string fileName = $"verifycode_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-                    string filePath = Path.Combine(folder, fileName);
-                    File.WriteAllBytes(filePath, imageBytes);
-                    //
-                    // MessageBox.Show($"驗證碼圖片已儲存至: {filePath}");
-                    UpdateStatus($"驗證碼圖片已儲存至: {filePath}");
-                    // 🔥 這裡是新增的部分：預測驗證碼並填入結果
-                    await PredictAndFillCaptcha(filePath);
-            
+
+                    // 預測驗證碼並填入結果，await代表執行完才會執行後面的程式，如果要用圖片預測，把上面註解掉後將參數改成filePath
+                    await PredictAndFillCaptcha(base64String);
+
                     // 只有在預測成功填入後才自動登入
                     var captchaInput = webBrowser.Document!.GetElementById("CheckText");
                     if (captchaInput != null && !string.IsNullOrEmpty(captchaInput.GetAttribute("value")))
@@ -335,7 +318,7 @@ namespace FlashGameLoader
                 }
                 else
                 {
-                    UpdateStatus("驗證碼識別失敗，請手動輸入");
+                    UpdateStatus("python error");
                 }
             }
             catch (Exception ex)
@@ -344,6 +327,8 @@ namespace FlashGameLoader
             }
         }
 
+
+        // 執行登入的JS
         private void ClickLogin()
         {
             webBrowser.Document!.InvokeScript("dosubmit");
