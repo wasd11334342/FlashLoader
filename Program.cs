@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Win32;
-
+using System.IO;
 
 
 namespace FlashGameLoader
@@ -66,6 +66,9 @@ namespace FlashGameLoader
         private WebBrowser webBrowser;
         private Label statusLabel;
 
+
+        private static string dataFilePath = "accounts.txt";
+
         // 設定瀏覽器IE的版本為IE11，設定完才可以用CSS的方式修改網頁的縮放，預設的IE7沒辦法用CSS
         private static void SetBrowserFeatureControl()
         {
@@ -79,17 +82,28 @@ namespace FlashGameLoader
         }
 
         [STAThread]
-        public static void Main()
+        public static void Main(string[] args)
         {
             SetBrowserFeatureControl();
             Application.EnableVisualStyles();
-            Application.Run(new Program());
+            // 解析命令列參數
+            if (args[0] == "-i" && args.Length >= 2)
+            {
+                Application.Run(new Program(args[1]));
+            }
+            else
+            {
+                MessageBox.Show("帳戶參數有誤", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Application.Exit();
+                return;
+            }
+            
         }
 
         // 介面主程式，網頁的邏輯，網頁的按鈕，網頁顯示文字
-        public Program()
+        public Program(string accountId)
         {
-            this.Text = "9s";
+            this.Text = accountId;
             this.Width = 1024;
             this.Height = 768;
 
@@ -135,12 +149,12 @@ namespace FlashGameLoader
                 });
             };
 
-
-
             refreshCodeButton.Click += (sender, e) =>
             {
                 RefreshVerifyCodeImage();
             };
+
+            var result = LoadAccounts(accountId);
 
             webBrowser.DocumentCompleted += (s, e) =>
             {
@@ -150,13 +164,13 @@ namespace FlashGameLoader
                     var userBox = webBrowser.Document!.GetElementById("UserID");
                     if (userBox != null)
                     {
-                        userBox.SetAttribute("value", "zxc11334342");
+                        userBox.SetAttribute("value", result!.Value.un);
                     }
                     // 自動輸入密碼
                     var passBox = webBrowser.Document.GetElementById("UserPwd");
                     if (passBox != null)
                     {
-                        passBox.SetAttribute("value", "zxc21735852");
+                        passBox.SetAttribute("value", result!.Value.pwd);
                     }
                     // 自動擷取驗證碼圖片
                     CaptureVerifyCodeImage();
@@ -381,6 +395,45 @@ namespace FlashGameLoader
                 {
                     browser.Navigate(url);
                 }
+            }
+        }
+
+
+        private static (string un, string pwd)? LoadAccounts(string Id)
+        {
+            try
+            {
+                string[] lines = File.ReadAllLines(dataFilePath);
+
+                foreach (string line in lines)
+                {
+                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
+                        continue;
+
+                    string[] parts = line.Split(' ',StringSplitOptions.RemoveEmptyEntries); //後面的參數代表空格長度多少，都算一個空格，直到遇到不是空格的值
+                    if (parts.Length == 3)
+                    {
+                        if (parts[0] == Id)
+                        {
+                            // 帳號，密碼
+                            return (parts[1], parts[2]);
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("帳戶格式有誤", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        Application.Exit();
+                        return null;
+                    }
+                }
+
+                return null; // 沒找到
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"讀取帳號檔案錯誤:{ex}", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Application.Exit();
+                return null;
             }
         }
 
